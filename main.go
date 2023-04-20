@@ -1,12 +1,20 @@
 package main
 
 import (
-	"fmt"       // Para saída formatada
-	"math/rand" // Para gerar números aleatórios
+	"bufio"
+	"fmt" // Para saída formatada
+	"os"
+	"strings"
 
+	"github.com/carlosbrando/embedding-db/openai_embedding"
+
+	// Para gerar números aleatórios
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat" // Para realizar operações matemáticas
 )
+
+// TODO: Trocar por ENV vars depois
+const model = "text-embedding-ada-002"
 
 // Estrutura do banco de dados de embeddings
 type EmbeddingDB struct {
@@ -23,12 +31,26 @@ func NewEmbeddingDB(dim int) *EmbeddingDB {
 }
 
 // Função para adicionar um novo embedding ao banco de dados
-func (db *EmbeddingDB) AddEmbedding(word string) {
-	embedding := make([]float64, db.dim) // Criar um novo vetor para armazenar o embedding
-	for i := 0; i < db.dim; i++ {
-		embedding[i] = rand.Float64() // Gerar um valor aleatório para cada elemento do embedding
+func (db *EmbeddingDB) AddEmbedding(word string, apiKey string) {
+	// Solicitar um embedding da API OpenAI usando nosso pacote openai_embedding
+	embeddingResponse, err := openai_embedding.CreateEmbedding(apiKey, model, word, "")
+	if err != nil {
+		fmt.Printf("Error creating embedding for word '%s': %v\n", word, err)
+		return
 	}
-	db.embeddings[word] = mat.NewDense(1, db.dim, embedding) // Adicionar o embedding ao mapa
+
+	// Obter o vetor de embedding gerado pela API OpenAI
+	openaiEmbedding := embeddingResponse.Data[0].Embedding
+
+	// Converter []float32 para []float64
+	embedding := make([]float64, len(openaiEmbedding))
+	for i, value := range openaiEmbedding {
+		embedding[i] = float64(value)
+	}
+
+	// Adicionar o embedding gerado ao banco de dados
+	db.embeddings[word] = mat.NewDense(1, db.dim, embedding)
+
 }
 
 // Função para obter o embedding de uma palavra do banco de dados
@@ -111,14 +133,37 @@ func (db *EmbeddingDB) FindClosest(word string, n int) []string {
 }
 
 func main() {
-	db := NewEmbeddingDB(50)
-
-	words := []string{"apple", "banana", "cherry", "orange", "grape", "strawberry", "pineapple"}
-	for _, word := range words {
-		db.AddEmbedding(word)
+	apiKey := os.Getenv("API_KEY")
+	if apiKey == "" {
+		fmt.Println("A variável de ambiente 'EMBEDDING_DB_API_KEY' não está definida.")
+		os.Exit(1)
 	}
 
-	word := "apple"
-	closestWords := db.FindClosest(word, 3)
-	fmt.Printf("Closest words to %s: %v\n", word, closestWords)
+	db := NewEmbeddingDB(1536) // openai tem 1536 dimensões
+
+	words := []string{"maça", "banana", "laranja", "uva", "morango", "abacaxi"}
+	for _, word := range words {
+		db.AddEmbedding(word, apiKey)
+	}
+
+	reader := bufio.NewReader(os.Stdin) // Leitor para ler a entrada do terminal
+
+	for {
+		fmt.Print("Digite uma palavra (ou 'sair' para encerrar): ")
+		input, _ := reader.ReadString('\n')               // Ler a entrada do usuário
+		input = strings.TrimSpace(strings.ToLower(input)) // Remover espaços e converter para minúsculas
+
+		if input == "sair" {
+			break
+		}
+
+		// Adicionar a palavra de entrada ao banco de dados se ainda não estiver presente
+		if _, ok := db.embeddings[input]; !ok {
+			db.AddEmbedding(input, apiKey)
+		}
+
+		// Encontrar e exibir as palavras mais próximas do dicionário
+		closestWords := db.FindClosest(input, 5)
+		fmt.Printf("Palavras mais próximas de '%s': %v\n\n", input, closestWords)
+	}
 }
