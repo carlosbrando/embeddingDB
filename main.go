@@ -8,7 +8,6 @@ import (
 
 	"github.com/carlosbrando/embedding-db/openai_embedding"
 
-	// Para gerar números aleatórios
 	"gonum.org/v1/gonum/floats"
 	"gonum.org/v1/gonum/mat" // Para realizar operações matemáticas
 )
@@ -135,7 +134,7 @@ func (db *EmbeddingDB) FindClosest(word string, n int) []string {
 func main() {
 	apiKey := os.Getenv("API_KEY")
 	if apiKey == "" {
-		fmt.Println("A variável de ambiente 'EMBEDDING_DB_API_KEY' não está definida.")
+		fmt.Println("A variável de ambiente 'API_KEY' não está definida.")
 		os.Exit(1)
 	}
 
